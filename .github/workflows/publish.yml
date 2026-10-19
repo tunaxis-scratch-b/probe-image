@@ -1,0 +1,30 @@
+name: publish
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone the repository
+        run: |
+          set -euo pipefail
+          git clone --depth 1 "https://github.com/${GITHUB_REPOSITORY}.git" src
+
+      - name: Build and push v1 and v2
+        working-directory: src
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          docker buildx build --push --provenance=false --sbom=false \
+            --tag "ghcr.io/${GITHUB_REPOSITORY}:v1" \
+            --tag "ghcr.io/${GITHUB_REPOSITORY}:v2" .
+          digest=$(docker buildx imagetools inspect "ghcr.io/${GITHUB_REPOSITORY}:v1" --format '{{json .Manifest}}' | jq -r '.digest')
+          printf 'digest=%s\n' "$digest" >> "$GITHUB_STEP_SUMMARY"
